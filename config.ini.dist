@@ -69,7 +69,18 @@
 #
 # Examples:
 #
-#Schefflera@Living = C4:7C:8D:11:22:33
-#JapaneseBonsai    = C4:7C:8D:44:55:66
-#Petunia@Balcony   = C4:7C:8D:77:88:99
+#Yucca@Living    = C4:7C:8D:11:22:33
+#JapaneseBonsai  = C4:7C:8D:44:55:66
+#Petunia@Balcony = C4:7C:8D:77:88:99
 
+# The subsequent sections define parameter ranges for plants. The value format
+# for each parameter is '<Min>-<Max>'. The values are not processed in any way,
+# but just forwarded to all subscribers.
+# One way to obtain these values is from the Xiaomi 'Flower Care' app that
+# conveniently displays ranges for each measured parameter.
+
+#[Yucca]
+
+#Light     = 1500-20000
+#Fertility = 350-2000
+#Moisture  = 15-60
