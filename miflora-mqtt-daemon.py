@@ -115,6 +115,14 @@ def flores_to_openhab_items(flores, reporting_mode):
         raise IOError('Given reporting_mode not supported for the export to openHAB items')
 
 
+def parse_name(name_string):
+    if '@' in name:
+        name_part, location_part = name_string.split('@')
+    else:
+        name_part, location_part = name_string, ''
+    return name_part, location_part
+
+
 # Load configuration file
 config = ConfigParser(delimiters=('=', ))
 config.optionxform = str
@@ -194,10 +202,7 @@ for [name, mac] in config['Sensors'].items():
         print_line('The MAC address "{}" seems to be in the wrong format. Please check your configuration'.format(mac), error=True, sd_notify=True)
         sys.exit(1)
 
-    if '@' in name:
-        name_pretty, location_pretty = name.split('@')
-    else:
-        name_pretty, location_pretty = name, ''
+    name_pretty, location_pretty = parse_name(name)
     name_clean = clean_identifier(name_pretty)
     location_clean = clean_identifier(location_pretty)
 
@@ -205,6 +210,25 @@ for [name, mac] in config['Sensors'].items():
     print('Adding sensor to device list and testing connection ...')
     print('Name:          "{}"'.format(name_pretty))
     #print_line('Attempting initial connection to Mi Flora sensor "{}" ({})'.format(name_pretty, mac), console=False, sd_notify=True)
+
+    ranges = dict()
+    # The range for the battery charge is 0-100, but of course we don't want a warning when full, hence 999
+    ranges[MI_BATTERY] = [0, 999]
+    if name_pretty in config:
+        for key, params in parameters.items():
+            if key not in [MI_TEMPERATURE, MI_BATTERY]:
+                val = config[name_pretty].get(params['name'], None)
+                if val is not None:
+                    if '-' in val:
+                        min, max = val.split('-')
+                        ranges[key] = [int(min), int(max)]
+                    else:
+                        print_line('Can\'t parse {} value for plant "{}"'.format(params['name'], name_pretty), warning=True)
+                else:
+                    print_line('{} range missing for plant "{}"'.format(params['name'], name_pretty), warning=True)
+
+    else:
+        print_line('No parameter ranges configured for Mi Flora sensor "{}" ({})'.format(name_pretty, mac), warning=True)
 
     flora_poller = MiFloraPoller(mac=mac, backend=GatttoolBackend, cache_timeout=miflora_cache_timeout, retries=3, adapter=used_adapter)
     flora['poller'] = flora_poller
@@ -214,6 +238,7 @@ for [name, mac] in config['Sensors'].items():
     flora['location_clean'] = location_clean
     flora['location_pretty'] = location_pretty
     flora['stats'] = {"count": 0, "success": 0, "failure": 0}
+    flora['ranges'] = ranges
     try:
         flora_poller.fill_cache()
         flora_poller.parameter_value(MI_LIGHT)
@@ -239,7 +264,7 @@ if reporting_mode == 'mqtt-json':
     print_line('Announcing Mi Flora devices to MQTT broker for auto-discovery ...')
     flores_info = dict()
     for [flora_name, flora] in flores.items():
-        flora_info = {key: value for key, value in flora.items() if key not in ['poller', 'stats']}
+        flora_info = {key: value for key, value in flora.items() if key not in ['poller', 'stats', 'ranges']}
         flora_info['topic'] = '{}/{}'.format(base_topic, flora_name)
         flores_info[flora_name] = flora_info
     mqtt_client.publish('{}/$announce'.format(base_topic), json.dumps(flores_info), retain=True)
@@ -332,6 +357,7 @@ while True:
 
         for param,_ in parameters.items():
             data[param] = flora['poller'].parameter_value(param)
+        data['ranges'] = flora['ranges']
         print_line('Result: {}'.format(json.dumps(data)))
         
         if reporting_mode == 'mqtt-json':

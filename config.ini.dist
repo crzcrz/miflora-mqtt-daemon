@@ -81,6 +81,6 @@
 
 #[Yucca]
 
-#Light     = 1500-20000
-#Fertility = 350-2000
-#Moisture  = 15-60
+#LightIntensity     = 1500-20000
+#SoilConductivity   = 350-2000
+#SoilMoisture       = 15-60
